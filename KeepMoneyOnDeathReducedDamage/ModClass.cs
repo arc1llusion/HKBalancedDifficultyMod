@@ -52,7 +52,11 @@ namespace HKBalancedDifficultyMod
 
         private void BossSceneController_ReportHealth(On.BossSceneController.orig_ReportHealth orig, HealthManager healthManager, int baseHP, int adjustedHP, bool forceAdd)
         {
-            if (!GlobalSettings.PreventBossScaleHp) return;
+            if (!GlobalSettings.PreventBossScaleHp)
+            {
+                orig(healthManager, baseHP, adjustedHP, forceAdd);
+                return;
+            };
 
             orig(healthManager, baseHP, baseHP, forceAdd);
         }
