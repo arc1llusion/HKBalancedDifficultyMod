@@ -7,20 +7,12 @@ using UnityEngine.SceneManagement;
 
 namespace HKBalancedDifficultyMod
 {
-    public class HKBalancedDifficultyMod : Mod, IMenuMod
+    public class HKBalancedDifficultyMod : Mod, IMenuMod, IGlobalSettings<GlobalSettings>
     {
         new public string GetName() => "Hollow Knight Balanced Difficulty";
-        public override string GetVersion() => "0.1.4";
+        public override string GetVersion() => "0.1.5";
 
-        private bool preventBossScaleHp = true;
-
-        private bool autoUpdateMapOnSceneLoad = true;
-
-        private bool reduceDamage = true;
-
-        private bool preventShade = true;
-
-        private bool permanentCompass = true;
+        private GlobalSettings GlobalSettings { get; set; } = new GlobalSettings();
 
         public override void Initialize()
         {
@@ -36,7 +28,7 @@ namespace HKBalancedDifficultyMod
         private void OnSceneManagerActiveSceneChanged(Scene from, Scene to)
         {
             Log("Scene transitioed to " + to.name);
-            if (!autoUpdateMapOnSceneLoad) return;
+            if (!GlobalSettings.AutoUpdateMapOnSceneLoad) return;
 
             if (GameManager.instance != null && GameManager.instance.gameMap != null && HeroController.instance != null && to.name != "Menu_Title" && to.name != "Quit_To_Menu")
             {
@@ -49,7 +41,7 @@ namespace HKBalancedDifficultyMod
 
         private bool PlayerData_GetBool(On.PlayerData.orig_GetBool orig, PlayerData self, string boolName)
         {
-            if (!permanentCompass)
+            if (!GlobalSettings.PermanentCompass)
                 return orig(self, boolName);
 
             //Charm 2 is compass
@@ -60,7 +52,7 @@ namespace HKBalancedDifficultyMod
 
         private void BossSceneController_ReportHealth(On.BossSceneController.orig_ReportHealth orig, HealthManager healthManager, int baseHP, int adjustedHP, bool forceAdd)
         {
-            if (!preventBossScaleHp) return;
+            if (!GlobalSettings.PreventBossScaleHp) return;
 
             orig(healthManager, baseHP, baseHP, forceAdd);
         }
@@ -73,7 +65,7 @@ namespace HKBalancedDifficultyMod
 
         private int ModHooks_AfterTakeDamageHook(int hazardType, int damageAmount)
         {
-            if (!reduceDamage) return damageAmount;
+            if (!GlobalSettings.ReduceDamage) return damageAmount;
 
             if (damageAmount > 1)
                 return damageAmount / 2;
@@ -84,7 +76,7 @@ namespace HKBalancedDifficultyMod
         {
             orig(self);
 
-            if (!preventShade) return;
+            if (!GlobalSettings.PreventShade) return;
 
             RemoveBullshitPartOfDeathSequence();
         }
@@ -174,6 +166,7 @@ namespace HKBalancedDifficultyMod
             }
         }
 
+        public bool ToggleButtonInsideMenu => false;
         public List<IMenuMod.MenuEntry> GetMenuData(IMenuMod.MenuEntry? toggleButtonEntry)
         {
             return new List<IMenuMod.MenuEntry>
@@ -189,9 +182,9 @@ namespace HKBalancedDifficultyMod
                     },
                     Saver = (opt) =>
                     {
-                        this.preventBossScaleHp = SaveBoolSwitch(opt);
+                        this.GlobalSettings.PreventBossScaleHp = SaveBoolSwitch(opt);
                     },
-                    Loader = () => LoadBoolSwitch(this.preventBossScaleHp)
+                    Loader = () => LoadBoolSwitch(this.GlobalSettings.PreventBossScaleHp)
                 },
                 new IMenuMod.MenuEntry
                 {
@@ -204,9 +197,9 @@ namespace HKBalancedDifficultyMod
                     },
                     Saver = (opt) =>
                     {
-                        this.autoUpdateMapOnSceneLoad = SaveBoolSwitch(opt);
+                        this.GlobalSettings.AutoUpdateMapOnSceneLoad = SaveBoolSwitch(opt);
                     },
-                    Loader = () => LoadBoolSwitch(this.autoUpdateMapOnSceneLoad)
+                    Loader = () => LoadBoolSwitch(this.GlobalSettings.AutoUpdateMapOnSceneLoad)
                 },
                 new IMenuMod.MenuEntry
                 {
@@ -219,9 +212,9 @@ namespace HKBalancedDifficultyMod
                     },
                     Saver = (opt) =>
                     {
-                        this.reduceDamage = SaveBoolSwitch(opt);
+                        this.GlobalSettings.ReduceDamage = SaveBoolSwitch(opt);
                     },
-                    Loader = () => LoadBoolSwitch(this.reduceDamage)
+                    Loader = () => LoadBoolSwitch(this.GlobalSettings.ReduceDamage)
                 },
                 new IMenuMod.MenuEntry
                 {
@@ -234,9 +227,9 @@ namespace HKBalancedDifficultyMod
                     },
                     Saver = (opt) =>
                     {
-                        this.preventShade = SaveBoolSwitch(opt);
+                        this.GlobalSettings.PreventShade = SaveBoolSwitch(opt);
                     },
-                    Loader = () => LoadBoolSwitch(this.preventShade)
+                    Loader = () => LoadBoolSwitch(this.GlobalSettings.PreventShade)
                 },
                 new IMenuMod.MenuEntry
                 {
@@ -249,9 +242,9 @@ namespace HKBalancedDifficultyMod
                     },
                     Saver = (opt) =>
                     {
-                        this.permanentCompass = SaveBoolSwitch(opt);
+                        this.GlobalSettings.PermanentCompass = SaveBoolSwitch(opt);
                     },
-                    Loader = () => LoadBoolSwitch(this.permanentCompass)
+                    Loader = () => LoadBoolSwitch(this.GlobalSettings.PermanentCompass)
                 }
             };
         }
@@ -275,6 +268,14 @@ namespace HKBalancedDifficultyMod
             };
         }
 
-        public bool ToggleButtonInsideMenu => false;
+        public void OnLoadGlobal(GlobalSettings s)
+        {
+            GlobalSettings = s ?? new GlobalSettings();
+        }
+
+        public GlobalSettings OnSaveGlobal()
+        {
+            return GlobalSettings;
+        }
     }
 }
