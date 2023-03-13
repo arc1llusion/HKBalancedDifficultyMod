@@ -1,27 +1,26 @@
-﻿using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.IO;
-using HutongGames.PlayMaker.Actions;
-using HutongGames.PlayMaker;
+﻿using Modding;
 using Satchel;
-using Modding;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
-using Newtonsoft.Json.Serialization;
-using Newtonsoft.Json;
-using System.Linq;
-using System.Reflection;
-using MonoMod.RuntimeDetour.HookGen;
-using System.ComponentModel;
-using MonoMod.RuntimeDetour;
 using UnityEngine.SceneManagement;
 
 namespace HKBalancedDifficultyMod
 {
-    public class HKBalancedDifficultyMod : Mod
+    public class HKBalancedDifficultyMod : Mod, IMenuMod
     {
         new public string GetName() => "Hollow Knight Balanced Difficulty";
-        public override string GetVersion() => "0.1.3";
+        public override string GetVersion() => "0.1.4";
+
+        private bool preventBossScaleHp = true;
+
+        private bool autoUpdateMapOnSceneLoad = true;
+
+        private bool reduceDamage = true;
+
+        private bool preventShade = true;
+
+        private bool permanentCompass = true;
 
         public override void Initialize()
         {
@@ -37,6 +36,7 @@ namespace HKBalancedDifficultyMod
         private void OnSceneManagerActiveSceneChanged(Scene from, Scene to)
         {
             Log("Scene transitioed to " + to.name);
+            if (!autoUpdateMapOnSceneLoad) return;
 
             if (GameManager.instance != null && GameManager.instance.gameMap != null && HeroController.instance != null && to.name != "Menu_Title" && to.name != "Quit_To_Menu")
             {
@@ -49,6 +49,9 @@ namespace HKBalancedDifficultyMod
 
         private bool PlayerData_GetBool(On.PlayerData.orig_GetBool orig, PlayerData self, string boolName)
         {
+            if (!permanentCompass)
+                return orig(self, boolName);
+
             //Charm 2 is compass
             if (boolName == "equippedCharm_2" || boolName == "hasQuill")
                 return true;
@@ -57,6 +60,8 @@ namespace HKBalancedDifficultyMod
 
         private void BossSceneController_ReportHealth(On.BossSceneController.orig_ReportHealth orig, HealthManager healthManager, int baseHP, int adjustedHP, bool forceAdd)
         {
+            if (!preventBossScaleHp) return;
+
             orig(healthManager, baseHP, baseHP, forceAdd);
         }
 
@@ -68,6 +73,8 @@ namespace HKBalancedDifficultyMod
 
         private int ModHooks_AfterTakeDamageHook(int hazardType, int damageAmount)
         {
+            if (!reduceDamage) return damageAmount;
+
             if (damageAmount > 1)
                 return damageAmount / 2;
             return damageAmount;
@@ -76,6 +83,8 @@ namespace HKBalancedDifficultyMod
         private void HeroController_Start(On.HeroController.orig_Start orig, HeroController self)
         {
             orig(self);
+
+            if (!preventShade) return;
 
             RemoveBullshitPartOfDeathSequence();
         }
@@ -164,5 +173,108 @@ namespace HKBalancedDifficultyMod
                 }
             }
         }
+
+        public List<IMenuMod.MenuEntry> GetMenuData(IMenuMod.MenuEntry? toggleButtonEntry)
+        {
+            return new List<IMenuMod.MenuEntry>
+            {
+                new IMenuMod.MenuEntry
+                {
+                    Name = "Prevent Boss Scaled HP",
+                    Description = "Prevent boss HP scaling on nail upgrade.",
+                    Values = new string[]
+                    {
+                        "Off",
+                        "On"
+                    },
+                    Saver = (opt) =>
+                    {
+                        this.preventBossScaleHp = SaveBoolSwitch(opt);
+                    },
+                    Loader = () => LoadBoolSwitch(this.preventBossScaleHp)
+                },
+                new IMenuMod.MenuEntry
+                {
+                    Name = "Auto Update Map On Scene Load",
+                    Description = "Updates the Map when going to a new room instead of finding a bench.",
+                    Values = new string[]
+                    {
+                        "Off",
+                        "On"
+                    },
+                    Saver = (opt) =>
+                    {
+                        this.autoUpdateMapOnSceneLoad = SaveBoolSwitch(opt);
+                    },
+                    Loader = () => LoadBoolSwitch(this.autoUpdateMapOnSceneLoad)
+                },
+                new IMenuMod.MenuEntry
+                {
+                    Name = "Reduce Damage",
+                    Description = "Reduces damage > 1 by half.",
+                    Values = new string[]
+                    {
+                        "Off",
+                        "On"
+                    },
+                    Saver = (opt) =>
+                    {
+                        this.reduceDamage = SaveBoolSwitch(opt);
+                    },
+                    Loader = () => LoadBoolSwitch(this.reduceDamage)
+                },
+                new IMenuMod.MenuEntry
+                {
+                    Name = "Prevent Shade",
+                    Description = "Do not lose geo and soul on death.",
+                    Values = new string[]
+                    {
+                        "Off",
+                        "On"
+                    },
+                    Saver = (opt) =>
+                    {
+                        this.preventShade = SaveBoolSwitch(opt);
+                    },
+                    Loader = () => LoadBoolSwitch(this.preventShade)
+                },
+                new IMenuMod.MenuEntry
+                {
+                    Name = "Permanent Compass",
+                    Description = "Makes it so the compass is permanently equipped regardless of charm.",
+                    Values = new string[]
+                    {
+                        "Off",
+                        "On"
+                    },
+                    Saver = (opt) =>
+                    {
+                        this.permanentCompass = SaveBoolSwitch(opt);
+                    },
+                    Loader = () => LoadBoolSwitch(this.permanentCompass)
+                }
+            };
+        }
+
+        private bool SaveBoolSwitch(int opt)
+        {
+            return opt switch
+            {
+                0 => false,
+                1 => true,
+                _ => throw new InvalidOperationException()
+            };
+        }
+
+        private int LoadBoolSwitch(bool val)
+        {
+            return val switch
+            {
+                false => 0,
+                true => 1
+            };
+        }
+
+        public bool ToggleButtonInsideMenu => false;
     }
 }
