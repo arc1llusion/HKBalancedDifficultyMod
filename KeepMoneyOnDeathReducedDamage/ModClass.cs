@@ -63,7 +63,11 @@ namespace HKBalancedDifficultyMod
 
         private void HeroController_ClearMP(On.HeroController.orig_ClearMP orig, HeroController self)
         {
-            //NOP
+            if(!GlobalSettings.PreventShade)
+            {
+                orig(self);
+            }
+            //else NOP
             //Only way I can find to not clear MP on respawn
         }
 
