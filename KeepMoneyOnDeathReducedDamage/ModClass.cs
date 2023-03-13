@@ -14,88 +14,14 @@ using System.Reflection;
 using MonoMod.RuntimeDetour.HookGen;
 using System.ComponentModel;
 using MonoMod.RuntimeDetour;
+using UnityEngine.SceneManagement;
 
 namespace HKBalancedDifficultyMod
 {
-    //public static class HealthManager
-    //{
-    //    public static class HPScaleGG
-    //    {
-    //        [EditorBrowsable(EditorBrowsableState.Never)]
-    //        public delegate int orig_GetScaledHP(int originalHP);
-
-    //        [EditorBrowsable(EditorBrowsableState.Never)]
-    //        public delegate int hook_GetScaledHP(orig_GetScaledHP orig, int originalHP);
-
-    //        public static event hook_GetScaledHP GetScaledHP
-    //        {
-    //            add
-    //            {
-    //                HookEndpointManager.Add<hook_GetScaledHP>(MethodBase.GetMethodFromHandle(RuntimeMethodHandle), value);
-    //            }
-    //            remove
-    //            {
-    //                HookEndpointManager.Remove<hook_GetScaledHP>(MethodBase.GetMethodFromHandle(RuntimeMethodHandle), value);
-    //            }
-    //        }
-    //    }
-    //}
-
-
-    //public class ExcludePropertyResolver : DefaultContractResolver
-    //{
-
-    //    private readonly string[] _properties = new string[0];
-
-    //    public ExcludePropertyResolver(params string[] properties)
-    //    {
-    //        _properties = new string[properties.Length];
-    //        Array.Copy(properties, _properties, properties.Length);
-    //    }
-
-    //    protected override IList<JsonProperty> CreateProperties(Type type, MemberSerialization memberSerialization)
-    //    {
-    //        var currentProperties = base.CreateProperties(type, memberSerialization);
-
-    //        currentProperties = currentProperties.Where(p => !this._properties.Contains(p.PropertyName)).ToList();
-
-    //        return currentProperties;
-    //    }
-    //}
-
     public class HKBalancedDifficultyMod : Mod
     {
         new public string GetName() => "Hollow Knight Balanced Difficulty";
-        public override string GetVersion() => "0.1.2";
-
-        //private static MethodInfo origGetScaledHP = typeof(HealthManager).GetNestedType("HPScaleGG", BindingFlags.NonPublic | BindingFlags.Instance).GetMethod("GetScaledHP", BindingFlags.Public | BindingFlags.Instance);
-        //private Hook OnGetScaledHP;
-
-        //private string[] removeActionPropertiesFromSerialization =
-        //    new string[]
-        //    {
-        //        "owner",
-        //        "Owner",
-        //        "gameObject",
-        //        "GameObject",
-        //        "rootFsm",
-        //        "RootFsm",
-        //        "fsm",
-        //        "Fsm",
-        //        "Position",
-        //        "Rotation",
-        //        "position",
-        //        "rotation",
-        //        "normalized",
-        //        "State",
-        //        "state",
-        //        "Actions",
-        //        "actions",
-        //        "linear",
-        //        "Linear",
-        //        "gamma",
-        //        "Gamma"
-        //    };
+        public override string GetVersion() => "0.1.3";
 
         public override void Initialize()
         {
@@ -103,20 +29,36 @@ namespace HKBalancedDifficultyMod
             ModHooks.AfterTakeDamageHook += ModHooks_AfterTakeDamageHook;
             On.HeroController.Start += HeroController_Start;
             On.HeroController.ClearMP += HeroController_ClearMP;
-
-            //On.HealthManager.HPScaleGG.GetScaledHP += HPScaleGG_GetScaledHP;
-            //OnGetScaledHP = new Hook(origGetScaledHP, CustomGetScaledHP);
+            On.BossSceneController.ReportHealth += BossSceneController_ReportHealth;
+            On.PlayerData.GetBool += PlayerData_GetBool;
+            UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneManagerActiveSceneChanged;
         }
 
-        //private int HPScaleGG_GetScaledHP(On.HealthManager.HPScaleGG.orig_GetScaledHP orig, ref ValueType self, int originalHP)
-        //{
-        //    return originalHP;
-        //}
+        private void OnSceneManagerActiveSceneChanged(Scene from, Scene to)
+        {
+            Log("Scene transitioed to " + to.name);
 
-        //private int CustomGetScaledHP(ValueType self, int originalHP) 
-        //{            
-        //    return originalHP;
-        //}
+            if (GameManager.instance != null && GameManager.instance.gameMap != null && HeroController.instance != null && to.name != "Menu_Title" && to.name != "Quit_To_Menu")
+            {
+                GameManager.instance.AddToScenesVisited(to.name);
+
+                Log("Player Map Update " + GameManager.instance.UpdateGameMap());
+                GameManager.instance.gameMap.GetComponent<GameMap>().SetupMap(false);
+            }
+        }
+
+        private bool PlayerData_GetBool(On.PlayerData.orig_GetBool orig, PlayerData self, string boolName)
+        {
+            //Charm 2 is compass
+            if (boolName == "equippedCharm_2" || boolName == "hasQuill")
+                return true;
+            else return orig(self, boolName);
+        }
+
+        private void BossSceneController_ReportHealth(On.BossSceneController.orig_ReportHealth orig, HealthManager healthManager, int baseHP, int adjustedHP, bool forceAdd)
+        {
+            orig(healthManager, baseHP, baseHP, forceAdd);
+        }
 
         private void HeroController_ClearMP(On.HeroController.orig_ClearMP orig, HeroController self)
         {
@@ -189,8 +131,14 @@ namespace HKBalancedDifficultyMod
             //if (Input.GetKeyDown(KeyCode.O))
             //{
             //    LogGameObjectComponents(HeroController.instance.gameObject);
-            //    Log(string.Empty);
-            //    LogGameObjectComponents(HeroController.instance.heroDeathPrefab);
+
+
+            //    foreach(var s in GameObject.FindObjectsOfType<MonoBehaviour>())
+            //    {
+            //        Log("Object name in scene: " + s.name);
+            //    }
+            //    //Log(string.Empty);
+            //    //LogGameObjectComponents(HeroController.instance.heroDeathPrefab);
             //}
         }
 
@@ -213,33 +161,7 @@ namespace HKBalancedDifficultyMod
                 foreach (var state in fsm.FsmStates)
                 {
                     Log("---State Name " + state.Name);
-                    //for (var i = 0; i < state.Actions.Length; ++i)
-                    //{
-                    //    //var act = state.Actions[i];
-
-                    //    //if (act is SendEventByName)
-                    //    //{
-                    //    //    Log("----Event Send " + (act as SendEventByName).sendEvent.Value);
-                    //    //}
-                    //    //else if (act is SendEventToRegister)
-                    //    //{
-                    //    //    Log("----Event Register Send " + (act as SendEventToRegister).eventName.Value);
-                    //    //}
-
-                    //    var actionJson = JsonConvert.SerializeObject(state.Actions[i], Formatting.Indented, new JsonSerializerSettings
-                    //    {
-                    //        ContractResolver = new ExcludePropertyResolver(removeActionPropertiesFromSerialization)
-                    //    });
-
-                    //    Log("---- " + actionJson);
-                    //}
                 }
-
-                //Log("-Transitions");
-                //foreach (var t in fsm.FsmGlobalTransitions)
-                //{
-                //    Log("--Transition Name" + t.EventName);
-                //}
             }
         }
     }
