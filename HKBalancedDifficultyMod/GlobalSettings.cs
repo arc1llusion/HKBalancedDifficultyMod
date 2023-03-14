@@ -17,5 +17,7 @@ namespace HKBalancedDifficultyMod
         public bool PreventShade { get; set; } = true;
 
         public bool PermanentCompass { get; set; } = true;
+
+        public bool IncreaseFocusSpeed { get; set; } = true;
     }
 }

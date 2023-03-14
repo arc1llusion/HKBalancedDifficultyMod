@@ -1,8 +1,11 @@
-﻿using Modding;
+﻿using HutongGames.PlayMaker;
+using HutongGames.PlayMaker.Actions;
+using Modding;
 using Satchel;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -11,7 +14,7 @@ namespace HKBalancedDifficultyMod
     public class HKBalancedDifficultyMod : Mod, IMenuMod, IGlobalSettings<GlobalSettings>
     {
         new public string GetName() => "Hollow Knight Balanced Difficulty";
-        public override string GetVersion() => "0.1.6";
+        public override string GetVersion() => "0.1.7";
 
         private GlobalSettings GlobalSettings { get; set; } = new GlobalSettings();
 
@@ -78,7 +81,7 @@ namespace HKBalancedDifficultyMod
 
         private void HeroController_ClearMP(On.HeroController.orig_ClearMP orig, HeroController self)
         {
-            if(!GlobalSettings.PreventShade)
+            if (!GlobalSettings.PreventShade)
             {
                 orig(self);
             }
@@ -99,13 +102,13 @@ namespace HKBalancedDifficultyMod
         {
             orig(self);
 
-            ToggleGeoSoulLossAndShadeSapwnFromDeathSequence(!GlobalSettings.PreventShade);
-            IncreaseSoulSpeed();
+            ToggleGeoSoulLossAndShadeSpawnFromDeathSequence(!GlobalSettings.PreventShade);
+            ToggleSoulSpeedIncrease();
         }
 
-        private void ToggleGeoSoulLossAndShadeSapwnFromDeathSequence(bool enabled = false)
+        private void ToggleGeoSoulLossAndShadeSpawnFromDeathSequence(bool enabled = false)
         {
-            if(HeroController.instance == null || HeroController.instance.heroDeathPrefab == null) return;
+            if (HeroController.instance == null || HeroController.instance.heroDeathPrefab == null) return;
 
             var go = HeroController.instance.heroDeathPrefab;
             var fsm = go.LocateMyFSM("Hero Death Anim");
@@ -147,9 +150,39 @@ namespace HKBalancedDifficultyMod
             }
         }
 
-        private void IncreaseSoulSpeed()
+        private void ToggleSoulSpeedIncrease()
         {
-            
+            if (HeroController.instance == null || HeroController.instance.spellControl == null) return;
+
+            var spellControl = HeroController.instance.spellControl;
+            var deepFocusState = spellControl.GetState("Deep Focus Speed");
+            var timePerMpDrain = spellControl.FsmVariables.FindFsmFloat("Time Per MP Drain");
+            var boolCharmTest = deepFocusState.Actions.FirstOrDefault(x => x is PlayerDataBoolTest);
+            var originalFocusMultiply = deepFocusState.Actions.First(x => x is FloatMultiply);
+
+
+            if (GlobalSettings.IncreaseFocusSpeed)
+            {
+                deepFocusState.Actions = new FsmStateAction[]
+                {
+                    new FloatMultiply
+                    {
+                        floatVariable = timePerMpDrain,
+                        multiplyBy = 0.5f,
+                        everyFrame = false
+                    },
+                    boolCharmTest,
+                    originalFocusMultiply
+                };
+            }
+            else
+            {
+                deepFocusState.Actions = new FsmStateAction[]
+                {
+                    boolCharmTest,
+                    originalFocusMultiply
+                };
+            }
         }
 
 
@@ -261,7 +294,7 @@ namespace HKBalancedDifficultyMod
                     Saver = (opt) =>
                     {
                         this.GlobalSettings.PreventShade = SaveBoolSwitch(opt);
-                        this.ToggleGeoSoulLossAndShadeSapwnFromDeathSequence(!this.GlobalSettings.PreventShade);
+                        this.ToggleGeoSoulLossAndShadeSpawnFromDeathSequence(!this.GlobalSettings.PreventShade);
                     },
                     Loader = () => LoadBoolSwitch(this.GlobalSettings.PreventShade)
                 },
@@ -279,6 +312,22 @@ namespace HKBalancedDifficultyMod
                         this.GlobalSettings.PermanentCompass = SaveBoolSwitch(opt);
                     },
                     Loader = () => LoadBoolSwitch(this.GlobalSettings.PermanentCompass)
+                },
+                new IMenuMod.MenuEntry
+                {
+                    Name = "Increase Focus Speed",
+                    Description = "Increases focus speed by half.",
+                    Values = new string[]
+                    {
+                        "Off",
+                        "On"
+                    },
+                    Saver = (opt) =>
+                    {
+                        this.GlobalSettings.IncreaseFocusSpeed = SaveBoolSwitch(opt);
+                        ToggleSoulSpeedIncrease();
+                    },
+                    Loader = () => LoadBoolSwitch(this.GlobalSettings.IncreaseFocusSpeed)
                 }
             };
         }
