@@ -2,6 +2,7 @@
 using Satchel;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -10,7 +11,7 @@ namespace HKBalancedDifficultyMod
     public class HKBalancedDifficultyMod : Mod, IMenuMod, IGlobalSettings<GlobalSettings>
     {
         new public string GetName() => "Hollow Knight Balanced Difficulty";
-        public override string GetVersion() => "0.1.5";
+        public override string GetVersion() => "0.1.6";
 
         private GlobalSettings GlobalSettings { get; set; } = new GlobalSettings();
 
@@ -22,7 +23,19 @@ namespace HKBalancedDifficultyMod
             On.HeroController.ClearMP += HeroController_ClearMP;
             On.BossSceneController.ReportHealth += BossSceneController_ReportHealth;
             On.PlayerData.GetBool += PlayerData_GetBool;
+            On.GameMap.PositionCompass += GameMap_PositionCompass;
             UnityEngine.SceneManagement.SceneManager.activeSceneChanged += OnSceneManagerActiveSceneChanged;
+        }
+
+        private void GameMap_PositionCompass(On.GameMap.orig_PositionCompass orig, GameMap self, bool posShade)
+        {
+            orig(self, posShade);
+
+            if (!GlobalSettings.PermanentCompass)
+                return;
+
+            self.compassIcon.SetActive(true);
+            ReflectionHelper.SetFieldSafe<GameMap, bool>(self, "displayingCompass", true);
         }
 
         private void OnSceneManagerActiveSceneChanged(Scene from, Scene to)
@@ -45,7 +58,7 @@ namespace HKBalancedDifficultyMod
                 return orig(self, boolName);
 
             //Charm 2 is compass
-            if (boolName == "equippedCharm_2" || boolName == "hasQuill")
+            if (boolName == "hasQuill")
                 return true;
             else return orig(self, boolName);
         }
@@ -55,10 +68,12 @@ namespace HKBalancedDifficultyMod
             if (!GlobalSettings.PreventBossScaleHp)
             {
                 orig(healthManager, baseHP, adjustedHP, forceAdd);
-                return;
-            };
-
-            orig(healthManager, baseHP, baseHP, forceAdd);
+            }
+            else
+            {
+                //Prevent scaled boss HP when nail upgrade in effect
+                orig(healthManager, baseHP, baseHP, forceAdd);
+            }
         }
 
         private void HeroController_ClearMP(On.HeroController.orig_ClearMP orig, HeroController self)
