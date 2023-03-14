@@ -40,7 +40,7 @@ namespace HKBalancedDifficultyMod
 
         private void OnSceneManagerActiveSceneChanged(Scene from, Scene to)
         {
-            Log("Scene transitioed to " + to.name);
+            Log("Scene transitioned to " + to.name);
             if (!GlobalSettings.AutoUpdateMapOnSceneLoad) return;
 
             if (GameManager.instance != null && GameManager.instance.gameMap != null && HeroController.instance != null && to.name != "Menu_Title" && to.name != "Quit_To_Menu")
@@ -57,7 +57,6 @@ namespace HKBalancedDifficultyMod
             if (!GlobalSettings.PermanentCompass)
                 return orig(self, boolName);
 
-            //Charm 2 is compass
             if (boolName == "hasQuill")
                 return true;
             else return orig(self, boolName);
@@ -100,71 +99,74 @@ namespace HKBalancedDifficultyMod
         {
             orig(self);
 
-            if (!GlobalSettings.PreventShade) return;
-
-            RemoveBullshitPartOfDeathSequence();
+            ToggleGeoSoulLossAndShadeSapwnFromDeathSequence(!GlobalSettings.PreventShade);
+            IncreaseSoulSpeed();
         }
 
-        private void RemoveBullshitPartOfDeathSequence()
+        private void ToggleGeoSoulLossAndShadeSapwnFromDeathSequence(bool enabled = false)
         {
+            if(HeroController.instance == null || HeroController.instance.heroDeathPrefab == null) return;
+
             var go = HeroController.instance.heroDeathPrefab;
             var fsm = go.LocateMyFSM("Hero Death Anim");
 
-            RemoveActionsFromState(fsm, "Break Glass HP");
-            RemoveActionsFromState(fsm, "Break Glass Geo");
-            RemoveActionsFromState(fsm, "Break Glass Attack");
+            ToggleActionsFromState(fsm, "Break Glass HP", enabled);
+            ToggleActionsFromState(fsm, "Break Glass Geo", enabled);
+            ToggleActionsFromState(fsm, "Break Glass Attack", enabled);
 
-            RemoveActionsFromState(fsm, "Remove Overcharm");
+            ToggleActionsFromState(fsm, "Remove Overcharm", enabled);
 
-            RemoveActionsFromState(fsm, "Remove Geo");
-            RemoveActionsFromState(fsm, "Set Shade");
+            ToggleActionsFromState(fsm, "Remove Geo", enabled);
+            ToggleActionsFromState(fsm, "Set Shade", enabled);
 
-            RemoveActionsFromState(fsm, "Check MP");
+            ToggleActionsFromState(fsm, "Check MP", enabled);
 
-            RemoveActionsFromState(fsm, "Notify Geo Counter");
-            RemoveActionsFromState(fsm, "Drain Soul");
-            RemoveActionsFromState(fsm, "Drain Soul 2");
+            ToggleActionsFromState(fsm, "Notify Geo Counter", enabled);
+            ToggleActionsFromState(fsm, "Drain Soul", enabled);
+            ToggleActionsFromState(fsm, "Drain Soul 2", enabled);
 
-            RemoveActionsFromState(fsm, "Bursting");
-            RemoveActionsFromState(fsm, "Break Msg");
-            RemoveActionsFromState(fsm, "Shade?");
-            RemoveActionsFromState(fsm, "No Shade");
-            RemoveActionsFromState(fsm, "Limit Soul");
-            RemoveActionsFromState(fsm, "Limit Soul?");
+            ToggleActionsFromState(fsm, "Bursting", enabled);
+            ToggleActionsFromState(fsm, "Break Msg", enabled);
+            ToggleActionsFromState(fsm, "Shade?", enabled);
+            ToggleActionsFromState(fsm, "No Shade", enabled);
+            ToggleActionsFromState(fsm, "Limit Soul", enabled);
+            ToggleActionsFromState(fsm, "Limit Soul?", enabled);
 
-            fsm.GetState("End").RemoveAction(0);//Removes the Start Soul Limiter Action
-            fsm.GetState("End").RemoveAction(0);//Removes the Soul Limiter UP Action
+            fsm.GetState("End").Actions[0].Enabled = enabled; //Toggles the Start Soul Limiter Action
+            fsm.GetState("End").Actions[1].Enabled = enabled; //Removes the Soul Limiter UP Action
         }
 
-        private void RemoveActionsFromState(PlayMakerFSM fsm, string stateName)
+        private void ToggleActionsFromState(PlayMakerFSM fsm, string stateName, bool enabled = false)
         {
             var state = fsm.GetState(stateName);
-
-            Log($"{state.Name} {state.Actions.Length}");
 
             var length = state.Actions.Length;
             for (var i = 0; i < length; ++i)
             {
-                state.RemoveAction(0); //Removing an action updates the array. If we want to remove all actions, just remove the first item each time
+                state.Actions[i].Enabled = enabled; //Removing an action updates the array. If we want to remove all actions, just remove the first item each time
             }
-
-            Log($"{state.Name} {state.Actions.Length}");
         }
+
+        private void IncreaseSoulSpeed()
+        {
+            
+        }
+
 
         public void OnHeroUpdate()
         {
-            //if (Input.GetKeyDown(KeyCode.O))
-            //{
-            //    LogGameObjectComponents(HeroController.instance.gameObject);
+            if (Input.GetKeyDown(KeyCode.O))
+            {
+                LogGameObjectComponents(HeroController.instance.spellControl.gameObject);
 
 
-            //    foreach(var s in GameObject.FindObjectsOfType<MonoBehaviour>())
-            //    {
-            //        Log("Object name in scene: " + s.name);
-            //    }
-            //    //Log(string.Empty);
-            //    //LogGameObjectComponents(HeroController.instance.heroDeathPrefab);
-            //}
+                //foreach (var s in GameObject.FindObjectsOfType<MonoBehaviour>())
+                //{
+                //    Log("Object name in scene: " + s.name);
+                //}
+                //Log(string.Empty);
+                //LogGameObjectComponents(HeroController.instance.heroDeathPrefab);
+            }
         }
 
         private void LogGameObjectComponents(GameObject go)
@@ -186,6 +188,13 @@ namespace HKBalancedDifficultyMod
                 foreach (var state in fsm.FsmStates)
                 {
                     Log("---State Name " + state.Name);
+
+                    Log("----Transitions");
+
+                    foreach (var transition in state.Transitions)
+                    {
+                        Log($"-----Transition: {transition.ToState}:{transition.EventName}:{transition.LinkConstraint}");
+                    }
                 }
             }
         }
@@ -252,6 +261,7 @@ namespace HKBalancedDifficultyMod
                     Saver = (opt) =>
                     {
                         this.GlobalSettings.PreventShade = SaveBoolSwitch(opt);
+                        this.ToggleGeoSoulLossAndShadeSapwnFromDeathSequence(!this.GlobalSettings.PreventShade);
                     },
                     Loader = () => LoadBoolSwitch(this.GlobalSettings.PreventShade)
                 },
