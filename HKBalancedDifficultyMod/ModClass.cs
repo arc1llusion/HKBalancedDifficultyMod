@@ -14,7 +14,7 @@ namespace HKBalancedDifficultyMod
     public class HKBalancedDifficultyMod : Mod, IMenuMod, IGlobalSettings<GlobalSettings>
     {
         new public string GetName() => "Hollow Knight Balanced Difficulty";
-        public override string GetVersion() => "0.1.7";
+        public override string GetVersion() => "0.1.8";
 
         private GlobalSettings GlobalSettings { get; set; } = new GlobalSettings();
 
@@ -38,7 +38,7 @@ namespace HKBalancedDifficultyMod
                 return;
 
             self.compassIcon.SetActive(true);
-            ReflectionHelper.SetFieldSafe<GameMap, bool>(self, "displayingCompass", true);
+            ReflectionHelper.SetFieldSafe(self, "displayingCompass", true);
         }
 
         private void OnSceneManagerActiveSceneChanged(Scene from, Scene to)
@@ -60,14 +60,18 @@ namespace HKBalancedDifficultyMod
             if (!GlobalSettings.PermanentCompass)
                 return orig(self, boolName);
 
-            if (boolName == "hasQuill")
+            if (boolName == nameof(PlayerData.instance.hasQuill))
                 return true;
             else return orig(self, boolName);
         }
 
         private void BossSceneController_ReportHealth(On.BossSceneController.orig_ReportHealth orig, HealthManager healthManager, int baseHP, int adjustedHP, bool forceAdd)
         {
-            Log($"Adjusted HP Call {baseHP} {adjustedHP} {forceAdd}");
+            if (BossSceneController.IsBossScene)
+            {
+                Log($"Adjusted HP Call {baseHP} {adjustedHP} {forceAdd}");
+            }
+
             if (!GlobalSettings.PreventBossScaleHp)
             {
                 orig(healthManager, baseHP, adjustedHP, forceAdd);
@@ -102,16 +106,17 @@ namespace HKBalancedDifficultyMod
         {
             orig(self);
 
-            ToggleGeoSoulLossAndShadeSpawnFromDeathSequence(!GlobalSettings.PreventShade);
+            ToggleGeoSoulLossAndShadeSpawnFromDeathSequence();
             ToggleSoulSpeedIncrease();
         }
 
-        private void ToggleGeoSoulLossAndShadeSpawnFromDeathSequence(bool enabled = false)
+        private void ToggleGeoSoulLossAndShadeSpawnFromDeathSequence()
         {
             if (HeroController.instance == null || HeroController.instance.heroDeathPrefab == null) return;
 
             var go = HeroController.instance.heroDeathPrefab;
             var fsm = go.LocateMyFSM("Hero Death Anim");
+            var enabled = !GlobalSettings.PreventShade;
 
             ToggleActionsFromState(fsm, "Break Glass HP", enabled);
             ToggleActionsFromState(fsm, "Break Glass Geo", enabled);
@@ -128,7 +133,7 @@ namespace HKBalancedDifficultyMod
             ToggleActionsFromState(fsm, "Drain Soul", enabled);
             ToggleActionsFromState(fsm, "Drain Soul 2", enabled);
 
-            ToggleActionsFromState(fsm, "Bursting", enabled);
+            //ToggleActionsFromState(fsm, "Bursting", enabled);
             ToggleActionsFromState(fsm, "Break Msg", enabled);
             ToggleActionsFromState(fsm, "Shade?", enabled);
             ToggleActionsFromState(fsm, "No Shade", enabled);
@@ -136,7 +141,7 @@ namespace HKBalancedDifficultyMod
             ToggleActionsFromState(fsm, "Limit Soul?", enabled);
 
             fsm.GetState("End").Actions[0].Enabled = enabled; //Toggles the Start Soul Limiter Action
-            fsm.GetState("End").Actions[1].Enabled = enabled; //Removes the Soul Limiter UP Action
+            fsm.GetState("End").Actions[1].Enabled = enabled; //Toggles the Soul Limiter UP Action
         }
 
         private void ToggleActionsFromState(PlayMakerFSM fsm, string stateName, bool enabled = false)
@@ -146,7 +151,7 @@ namespace HKBalancedDifficultyMod
             var length = state.Actions.Length;
             for (var i = 0; i < length; ++i)
             {
-                state.Actions[i].Enabled = enabled; //Removing an action updates the array. If we want to remove all actions, just remove the first item each time
+                state.Actions[i].Enabled = enabled; 
             }
         }
 
@@ -158,8 +163,7 @@ namespace HKBalancedDifficultyMod
             var deepFocusState = spellControl.GetState("Deep Focus Speed");
             var timePerMpDrain = spellControl.FsmVariables.FindFsmFloat("Time Per MP Drain");
             var boolCharmTest = deepFocusState.Actions.FirstOrDefault(x => x is PlayerDataBoolTest);
-            var originalFocusMultiply = deepFocusState.Actions.First(x => x is FloatMultiply);
-
+            var originalFocusMultiply = deepFocusState.Actions.LastOrDefault(x => x is FloatMultiply);
 
             if (GlobalSettings.IncreaseFocusSpeed)
             {
@@ -213,7 +217,7 @@ namespace HKBalancedDifficultyMod
 
                 foreach (var ev in fsm.FsmEvents)
                 {
-                    Log("--Event Name" + ev.Name);
+                    Log("--Event Name" + ev.Name + " " + ev.IsGlobal);
                 }
 
                 Log("-States");
@@ -294,7 +298,7 @@ namespace HKBalancedDifficultyMod
                     Saver = (opt) =>
                     {
                         this.GlobalSettings.PreventShade = SaveBoolSwitch(opt);
-                        this.ToggleGeoSoulLossAndShadeSpawnFromDeathSequence(!this.GlobalSettings.PreventShade);
+                        this.ToggleGeoSoulLossAndShadeSpawnFromDeathSequence();
                     },
                     Loader = () => LoadBoolSwitch(this.GlobalSettings.PreventShade)
                 },
